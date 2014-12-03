@@ -2,6 +2,8 @@
 
 #include "mapHandler.h"
 
+#define NORMALE 5
+
 namespace CGoGN
 {
 
@@ -34,6 +36,27 @@ void Surface_NormalEstimation_Plugin::disable()
     disconnect(m_normalEstimationDialog->button_ok, SIGNAL(clicked()), this, SLOT(estimateFromDialog()));
 }
 
+void Surface_NormalEstimation_Plugin::draw(View* view)
+{
+    QList<QListWidgetItem*> currentItems = m_normalEstimationDialog->list_maps->selectedItems();
+    if(!currentItems.empty())
+    {
+        const QString& mapName = currentItems[0]->text();
+        MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapName));
+        if(mh_map)
+        {
+            PFP2::MAP* map = mh_map->getMap();
+            VertexAttribute<PFP2::VEC3, PFP2::MAP> normalMap = mh_map->getAttribute<PFP2::VEC3, VERTEX>("normal");
+
+            if(normalMap.isValid())
+            {
+                //Dessiner les normales en chaque point
+                glCallList(NORMALE);
+            }
+        }
+    }
+}
+
 void Surface_NormalEstimation_Plugin::openNormalEstimationDialog()
 {
     m_normalEstimationDialog->show();
@@ -63,6 +86,8 @@ void Surface_NormalEstimation_Plugin::estimateFromDialog()
             {
                 normalMap = mh_map->addAttribute<PFP2::VEC3, VERTEX>("normal");
             }
+
+            glNewList(NORMALE, GL_COMPILE);
 
             //Recherche des K plus proches voisins
             const int K = 5;
@@ -145,7 +170,17 @@ void Surface_NormalEstimation_Plugin::estimateFromDialog()
 
                 normalMap[d] = PFP2::VEC3(eigen_solver.eigenvectors().col(2)(0).real(), eigen_solver.eigenvectors().col(2)(1).real(), eigen_solver.eigenvectors().col(2)(2).real());
 
-                CGoGNout << normalMap[d] << CGoGNendl;
+                glBegin(GL_LINE);
+                glColor3f(1.f, 1.f, 0.f);
+                    glVertex3f(normalMap[d][0], normalMap[d][1], normalMap[d][2]);
+                    glVertex3f(positionMap[d][0], positionMap[d][1], positionMap[d][2]);
+                glEnd();
+                glBegin(GL_POINT);
+                    glPointSize(10.f);
+                    glColor3f(1.f, 0.f, 0.f);
+                    glVertex3f(normalMap[d][0], normalMap[d][1], normalMap[d][2]);
+                glEnd();
+                glColor3f(1.f, 1.f, 1.f);
 
 //                for(int i = 0; i < eigen_solver.eigenvectors().rows(); ++i)
 //                {
@@ -155,6 +190,8 @@ void Surface_NormalEstimation_Plugin::estimateFromDialog()
 //                }
 //                CGoGNout << "-------------------------------" << CGoGNendl;
             }
+            glEndList();
+            mh_map->notifyAttributeModification(normalMap);
         }
     }
     m_normalEstimationDialog->close();
